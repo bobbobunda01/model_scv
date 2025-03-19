@@ -1,7 +1,6 @@
 joblib
 pydantic
 flask
-PIL
 numpy 
 pandas
 fastapi==0.61.1
