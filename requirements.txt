@@ -1,11 +1,7 @@
 joblib
 pydantic
 flask
-PIL
 numpy 
 pandas
-fastapi==0.61.1
-uvicorn==0.11.8
-pillow==8.0.1
-python-multipart==0.0.5
-pytest==6.1.2
+gunicorn==20.1.0
+scikit-learn
