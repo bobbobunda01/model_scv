@@ -25,6 +25,7 @@ class request_body(BaseModel):
     
     HomeTeam:str
     AwayTeam:str
+    comp:str
 
 
 
@@ -59,14 +60,11 @@ def standardize_user_input(input_user, ds_scale):
 
     return input_standardized
 
-# Chargement des données historiques
-df=pd.read_csv('pl_match_03_2025_hist_net.csv')
-df.drop('Unnamed: 0', axis=1, inplace=True)
-df['Date']=pd.to_datetime(df['Date'])
+# definition des variables 
+df=pd.DataFrame()
+ds_scale=pd.DataFrame()
 
-# chargement de paramètres de standardisation des données de pretraitement
-ds_scale=pd.read_csv('dp_scaler.csv')
-ds_scale.set_index('Unnamed: 0', inplace=True)
+
 
 @app.route('/predire/pl', methods=["POST"])
 def prediction():
@@ -79,6 +77,22 @@ def prediction():
         donnees_df=pd.DataFrame([donnees.dict()]) # conversion en DataFrame
         home=np.array(donnees_df.HomeTeam.values).item()
         away=np.array(donnees_df.AwayTeam.values).item()
+        comp=np.array(donnees_df.comp.values).item()
+        
+        if comp=='pl':
+            
+            # Chargement des données de la Première league
+            
+            # Chargement des données historiques
+            hi=pd.read_csv('pl_match_03_2025_hist_net.csv')
+            hi.drop('Unnamed: 0', axis=1, inplace=True)
+            hi['Date']=pd.to_datetime(hi['Date'])
+            df=hi
+
+            # chargement de paramètres de standardisation des données de pretraitement
+            scale=pd.read_csv('dp_scaler.csv')
+            scale.set_index('Unnamed: 0', inplace=True)
+            ds_scale=scale
         
         #perf=df[df['HomeTeam']==home].sort_values(by='Date', ascending=False).head(1)
         

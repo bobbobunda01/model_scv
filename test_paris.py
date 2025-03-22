@@ -20,6 +20,7 @@ import requests
 
 url_base='http://127.0.0.1:5000'
 #url_base='https://model-scv.onrender.com'
+#https://model-scv.onrender.com
 
 # Test de point d'accès d'accueil
 reponse=requests.get(f"{url_base}/")
@@ -32,6 +33,7 @@ data={
       
       "HomeTeam":"Tottenham",	
       "AwayTeam":"Bournemouth",
+      "comp":"pl"
     }
 
 
