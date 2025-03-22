@@ -35,7 +35,7 @@ def Acceuil():
 
 # Chargement du modele
 
-xgboost_model =load('svm_modele.joblib')
+modele=load('svm_modele.joblib')
 
 def data_df(df, model):
     
@@ -47,10 +47,26 @@ def data_df(df, model):
     df.replace({True:1, False:0}, inplace=True)
     return df
 
+def standardize_user_input(input_user, ds_scale):
+    
+    input_standardized = input_user.copy()
+
+    # Appliquer la standardisation pour chaque colonne
+    for column in input_standardized.select_dtypes(exclude='object').columns:
+        mean = ds_scale.at['mean', column]  # Récupérer la moyenne
+        std = ds_scale.at['std', column]    # Récupérer l'écart-type
+        input_standardized[column] = (input_standardized[column] - mean) / std
+
+    return input_standardized
+
+# Chargement des données historiques
 df=pd.read_csv('pl_match_03_2025_hist_net.csv')
 df.drop('Unnamed: 0', axis=1, inplace=True)
+df['Date']=pd.to_datetime(df['Date'])
 
-# choix de l'équipe
+# chargement de paramètres de standardisation des données de pretraitement
+ds_scale=pd.read_csv('dp_scaler.csv')
+ds_scale.set_index('Unnamed: 0', inplace=True)
 
 @app.route('/predire/pl', methods=["POST"])
 def prediction():
@@ -62,25 +78,53 @@ def prediction():
         donnees= request_body(**request.json) 
         donnees_df=pd.DataFrame([donnees.dict()]) # conversion en DataFrame
         home=np.array(donnees_df.HomeTeam.values).item()
+        away=np.array(donnees_df.AwayTeam.values).item()
         
-        perf=df[df['HomeTeam']==home].sort_values(by='Date', ascending=False).head(1)
+        #perf=df[df['HomeTeam']==home].sort_values(by='Date', ascending=False).head(1)
+        
+        cols_home=['HomeTeam','FTHG',  'HTGS', 'HTGC', 'HTHG', 'HHGS' ,'HHGC','HTP',
+           'HM1' ,'HM2', 'HM3', 'HM4', 'HM5', 'HTFormPts', 'HTWinStreak3', 
+           'HTWinStreak5', 'HTLossStreak3','HTGD', 'HHGD', 'Date']
+        cols_away=['AwayTeam','FTAG', 'ATGS', 'ATGC', 'HTAG', 'AHGS' ,'AHGC','ATP',
+           'AM1' ,'AM2', 'AM3', 'AM4', 'AM5', 'ATFormPts', 'ATWinStreak3', 
+           'ATWinStreak5', 'ATLossStreak3','ATGD', 'AHGD', 'Date']
+        #DiffPts=HTP-ATP
+        #DiffFormPts=HTFormPts-ATFormPts
+        
+        df_home=df.loc[df['HomeTeam']==home,cols_home].sort_values(by='Date', ascending=False).drop('Date', axis=1).head(1)
+        df_away=df.loc[df['AwayTeam']==away,cols_away].sort_values(by='Date', ascending=False).drop('Date', axis=1).head(1)
+        df_home=df_home.reset_index()
+        df_away=df_away.reset_index()
+        
+        perf_home=df_home['HM1']+df_home['HM2']+df_home['HM3']+df_home['HM4']+df_home['HM5']
+        perf_away=df_away['AM1']+df_away['AM2']+df_away['AM3']+df_away['AM4']+df_away['AM5']
+        
+        df_home_away=pd.concat([df_home, df_away], axis=1)
+        df_home_away=df_home_away.drop('index', axis=1)
+        
+        df_home_away['DiffPts']=df_home_away['HTP']-df_home_away['ATP']
+        df_home_away['DiffFormPts']=df_home_away['HTFormPts']-df_home_away['ATFormPts']
+        
+        df_home_away=standardize_user_input(df_home_away, ds_scale)
         
         # Transformation des données
 
-        x_t=perf.drop(['FTR', 'HTR', 'Date', 'HomeTeam'	,'AwayTeam'], axis=1)
+        x_t=df_home_away.drop(['HomeTeam','AwayTeam'], axis=1)
         x_t = pd.get_dummies(x_t, columns=['HM1','HM2','HM3','HM4','HM5','AM1', 'AM2', 'AM3', 'AM4', 'AM5'])
         x_t.replace({True:1, False:0}, inplace=True)
         
         #prediction 
-        x_t=data_df(x_t, xgboost_model)
+        x_t=data_df(x_t, modele)
 
-        Y_pred = xgboost_model.predict(x_t)
+        Y_pred = modele.predict(x_t)
         #y_proba= xgboost_model.predict_proba(x_t)
         
         
         # compilation des resultats dans un dictionnaire
         resul=donnees.dict()
-        resul['WIN']=int(Y_pred)
+        resul['5_dern_perf_home']=np.array(perf_home).item()
+        resul['5_dern_perf_away']=np.array(perf_away).item()
+        resul['resultat']=int(Y_pred)
         #resul['proba']=float(y_proba[1])
         
         # Renvoie les résultats sous forme de Json
