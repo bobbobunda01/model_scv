@@ -19,6 +19,7 @@ import requests
 # lien d'accès
 
 url_base='http://127.0.0.1:5000'
+#url_base='https://model-scv.onrender.com'
 
 # Test de point d'accès d'accueil
 reponse=requests.get(f"{url_base}/")
@@ -29,8 +30,8 @@ print("reponse de point d'accès:", reponse.text)
 
 data={
       
-      "HomeTeam":"Brentford",	
-      "AwayTeam":"Aston Villa",
+      "HomeTeam":"Tottenham",	
+      "AwayTeam":"Bournemouth",
     }
 
 
