@@ -25,20 +25,38 @@ url_base='http://127.0.0.1:5000'
 # Test de point d'accès d'accueil
 reponse=requests.get(f"{url_base}/")
 
-print("reponse de point d'accès:", reponse.text)
+#print("reponse de point d'accès:", reponse.text)
 
 # Données d'exemple pour la prédiction
 
 data={
-      
-      "HomeTeam":"Tottenham",	
-      "AwayTeam":"Bournemouth",
-      "comp":"pl"
-    }
 
+    "matches": [
+        {
+            "HomeTeam": "Liverpool",
+            "AwayTeam": "Southampton",
+            "comp": "pl"
+        },
+        {
+            "HomeTeam": "Chelsea",
+            "AwayTeam": "Leicester",
+            "comp": "pl"
+        },
+        {
+            "HomeTeam": "Man United",
+            "AwayTeam": "Tottenham",
+            "comp": "pl"
+        },
+        {
+            "HomeTeam": "Everton",
+            "AwayTeam": "Bournemouth",
+            "comp": "pl"
+        }
+    ]
+}
 
-
-# Test de point d'accès de prediction
- 
-reponse=requests.post(f"{url_base}/predire/pl", json=data)
-print("Reponse de point d'accès de prediction :", reponse.text)
+# Envoi de la requête POST
+response = requests.post(f"{url_base}/predire/pl", json=data)
+print(response.text) 
+# Affichage de la réponse
+print(response.json())
