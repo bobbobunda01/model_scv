@@ -1,8 +1,6 @@
 joblib
 pydantic
 flask
-gunicorn
 numpy 
 pandas
-fastapi
-uvicorn
+gunicorn
