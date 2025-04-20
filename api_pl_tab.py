@@ -92,7 +92,7 @@ def prediction():
                 
             elif comp=='sa':
                 # Chargement des données historiques
-                hi=pd.read_csv('sa_25_2025.cvs')
+                hi=pd.read_csv('sa_25_2025.csv')
                 hi.drop('Unnamed: 0', axis=1, inplace=True)
                 hi['Date']=pd.to_datetime(hi['Date'])
                 df=hi
@@ -104,7 +104,7 @@ def prediction():
             
             elif comp=='lg':
                 # Chargement des données historiques
-                hi=pd.read_csv('lg_25_2025.cvs')
+                hi=pd.read_csv('lg_25_2025.csv')
                 hi.drop('Unnamed: 0', axis=1, inplace=True)
                 hi['Date']=pd.to_datetime(hi['Date'])
                 df=hi
@@ -116,7 +116,7 @@ def prediction():
                 
             elif comp=='bl':
                 # Chargement des données historiques
-                hi=pd.read_csv('bl_25_01_04_2025.cvs')
+                hi=pd.read_csv('bl_25_01_04_2025.csv')
                 hi.drop('Unnamed: 0', axis=1, inplace=True)
                 hi['Date']=pd.to_datetime(hi['Date'])
                 df=hi
