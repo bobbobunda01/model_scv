@@ -15,12 +15,14 @@ Created on Sat Aug 10 10:02:57 2024
 """
 
 import requests
+import json
 
 # lien d'accès
 
 url_base='http://127.0.0.1:5000'
 #url_base='https://model-scv.onrender.com'
 #https://model-scv.onrender.com
+#url_base='https://model-scv.onrender.com'
 
 # Test de point d'accès d'accueil
 #reponse=requests.get(f"{url_base}/")
@@ -35,65 +37,24 @@ data={
         
         
         {
-            "HomeTeam": "Alaves",
-            "AwayTeam": "Real Madrid",
-            "comp": "lg"
+            "HomeTeam": "Wolves",
+            "AwayTeam": "Tottenham",
+            "comp": "pl"
+            
         },
-        
+
         {
-            "HomeTeam": "Leganes",
-            "AwayTeam": "Barcelona",
-            "comp": "lg"
-        }
-        ,
-        
-        {
-            "HomeTeam": "Betis",
-            "AwayTeam": "Villarreal",
-            "comp": "lg"
-        },
-        
-        {
-            "HomeTeam": "Ath Madrid",
-            "AwayTeam": "Valladolid",
-            "comp": "lg"
-        },
-        
-        
-        {
-            "HomeTeam": "Leganes",
-            "AwayTeam": "Osasuna",
-            "comp": "lg"
-        },
-        {
-            "HomeTeam": "Udinese",
-            "AwayTeam": "Milan",
-            "comp": "sa"
-        }
-        ,
-        
-        {
-            "HomeTeam": "Fiorentina",
-            "AwayTeam": "Parma",
-            "comp": "sa"
-        },
-        
-        {
-            "HomeTeam": "Verona",
-            "AwayTeam": "Genoa",
-            "comp": "sa"
-        },
-        
-        {
-            "HomeTeam": "Lazio",
-            "AwayTeam": "Roma",
-            "comp": "sa"
+            "HomeTeam": "Newcastle",
+            "AwayTeam": "Man United",
+            "comp": "pl"
+            
         }
     ]
 }
 
 # Envoi de la requête POST
 response = requests.post(f"{url_base}/predire/pl", json=data)
-print(response.text) 
 # Affichage de la réponse
-print(response.json())
+response_data=response.json()
+formatted_json = json.dumps(response_data, indent=2, ensure_ascii=False)  # Indentation de 2 espaces
+print(formatted_json)
