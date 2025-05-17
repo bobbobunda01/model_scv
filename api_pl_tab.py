@@ -6,12 +6,15 @@ Created on Mon Mar 24 11:59:03 2025
 @author: bobunda
 """
 
+import datetime
+import json
 from joblib import load
 from pydantic import BaseModel
 from flask import Flask, jsonify, request
 from typing import List
 import numpy as np
 import pandas as pd
+import os
 
 app = Flask(__name__)
 
@@ -20,6 +23,10 @@ class MatchInput(BaseModel):
     HomeTeam: str
     AwayTeam: str
     comp: str
+    odds_home:float
+    odds_draw:float
+    odds_away:float
+    
 
 # Modèle pour recevoir un tableau d'entrées
 class RequestBody(BaseModel):
@@ -52,7 +59,17 @@ def standardize_user_input(input_user, ds_scale):
         input_standardized[column] = (input_standardized[column] - mean) / std
 
     return input_standardized
-
+# Fonction pour logger chaque prédiction dans logs/logs.jsonl
+def log_prediction(prediction):
+    log_data = {
+        "request_date": datetime.datetime.utcnow().isoformat(),
+        #"input": data,
+        "prediction": prediction
+    }
+    os.makedirs("logs", exist_ok=True)
+    with open("logs/logs.jsonl", "a") as f:
+        f.write(json.dumps(log_data) + "\n")
+        
 def form(d_plf):
 
     def get_points(result):
@@ -278,8 +295,105 @@ def df_data(sa_25, home, away):
     cols = ['HTGD','ATGD', 'HHGD', 'AHGD','DiffPts','DiffFormPts','HTP','ATP']
     for col in cols:
         df_home_away[col] = df_home_away[col] /33
-    return df_home_away,df_home_away, df_home, df_away
+    return df_home_away, df_home, df_away
+def get_team_stats(df, team, n=5):
+    """
+    Récupère les stats des N derniers matchs pour une équipe (home + away confondus)
+    """
+    team_matches = df[(df['HomeTeam'] == team) | (df['AwayTeam'] == team)].sort_values(by='Date', ascending=False).head(n)
+    
+    goals_for = []
+    goals_against = []
+    goal_diff = []
+    points = []
+    results = []
+    
+    for _, row in team_matches.iterrows():
+        if row['HomeTeam'] == team:
+            gf = row['FTHG']
+            ga = row['FTAG']
+            gd = gf - ga
+            if row['FTR'] == 'H':
+                pts = 3
+                res = 'W'
+            elif row['FTR'] == 'D':
+                pts = 1
+                res = 'D'
+            else:
+                pts = 0
+                res = 'L'
+        else:  # Away
+            gf = row['FTAG']
+            ga = row['FTHG']
+            gd = gf - ga
+            if row['FTR'] == 'A':
+                pts = 3
+                res = 'W'
+            elif row['FTR'] == 'D':
+                pts = 1
+                res = 'D'
+            else:
+                pts = 0
+                res = 'L'
+        
+        goals_for.append(gf)
+        goals_against.append(ga)
+        goal_diff.append(gd)
+        points.append(pts)
+        results.append(res)
+    
+    stats = {
+        'Avg_GF_Last{}_Games'.format(n): np.mean(goals_for) if goals_for else 0,
+        'Avg_GA_Last{}_Games'.format(n): np.mean(goals_against) if goals_against else 0,
+        'PPM_Last{}_Games'.format(n): np.mean(points) if points else 0,
+        'Win_Rate_Last{}_Games'.format(n): results.count('W') / n if n > 0 else 0,
+        'Win_Streak_Current': count_streak(results, 'W'),
+        'Lose_Streak_Current': count_streak(results, 'L'),
+        'Att_Def_Ratio_Last{}_Games'.format(n): (np.mean(goals_for) / np.mean(goals_against)) if np.mean(goals_against) > 0 else np.nan,
+        'Strength_Index': (0.5 * (results.count('W') / n)) + (0.3 * (np.mean(goals_for) - np.mean(goals_against))) + (0.2 * np.mean(points)),
+        'GD_Last{}_Avg'.format(n): np.mean(goal_diff) if goal_diff else 0
+    }
+    
+    return stats
 
+def count_streak(results, target='W'):
+    """
+    Compte le streak courant (victoires/défaites consécutives au début de la série)
+    """
+    streak = 0
+    for r in results:
+        if r == target:
+            streak += 1
+        else:
+            break
+    return streak
+
+def prepare_features_for_next_match(df, home_team, away_team, odds_home, odds_draw, odds_away):
+    """
+    Prépare les features prospectifs pour un match à venir
+    """
+    home_stats = get_team_stats(df, home_team)
+    away_stats = get_team_stats(df, away_team)
+    
+    # Combine en une seule ligne de features
+    features = {}
+    
+    # Add home team stats
+    for k, v in home_stats.items():
+        features['Home_' + k] = v
+        
+    # Add away team stats
+    for k, v in away_stats.items():
+        features['Away_' + k] = v
+    
+    # Add the odds
+    features['B365H'] = odds_home
+    features['B365D'] = odds_draw
+    features['B365A'] = odds_away
+    features['Odds_HA_Diff'] = odds_home - odds_away
+    features['Odds_HD_Diff'] = odds_home - odds_draw
+    
+    return features
 # definition des variables 
 df=pd.DataFrame()
 ds_scale=pd.DataFrame()
@@ -301,6 +415,9 @@ def prediction():
             home=np.array(donnees_df.HomeTeam.values).item()
             away=np.array(donnees_df.AwayTeam.values).item()
             comp=np.array(donnees_df.comp.values).item()
+            odds_h = donnees_df["odds_home"].values[0]
+            odds_d = donnees_df["odds_draw"].values[0]
+            odds_a = donnees_df["odds_away"].values[0]
             
             if comp=='pl':
                 
@@ -364,24 +481,47 @@ def prediction():
                 scale=pd.read_csv('dp_scale_fl.csv')
                 scale.set_index('Unnamed: 0', inplace=True)
                 ds_scale=scale
-                
-            #perf=df[df['HomeTeam']==home].sort_values(by='Date', ascending=False).head(1)
+            
+            df_home_away, df_home, df_away=df_data(df, home, away)
+            
+            df_home_away = df_home_away.loc[:, ~df_home_away.columns.duplicated(keep='first')]
+            
+            df_test=prepare_features_for_next_match(df, home, away, odds_h, odds_d, odds_a)
+            new_df = pd.DataFrame([df_test])
+            
+            df_home_away = pd.concat([df_home_away, new_df], axis=1)
+            
+            # Probabilités implicites à partir des cotes Bet365
+            df_home_away['Prob_H'] = 1 / df_home_away['B365H']
+            df_home_away['Prob_D'] = 1 / df_home_away['B365D']
+            df_home_away['Prob_A'] = 1 / df_home_away['B365A']
+
+            # Normalisation des probabilités
+            df_home_away['Prob_Total'] = df_home_away['Prob_H'] + df_home_away['Prob_D'] + df_home_away['Prob_A']
+            df_home_away['Prob_H'] /= df_home_away['Prob_Total']
+            df_home_away['Prob_D'] /= df_home_away['Prob_Total']
+            df_home_away['Prob_A'] /= df_home_away['Prob_Total']
+
+            # Deltas entre probabilités
+            df_home_away['Delta_Prob_HD'] = df_home_away['Prob_H'] - df_home_away['Prob_D']
+            df_home_away['Delta_Prob_HA'] = df_home_away['Prob_H'] - df_home_away['Prob_A']
+
+            # Volatilité du marché
+            df_home_away['Volatility_Index'] = abs(df_home_away['Prob_H'] - df_home_away['Prob_A'])
+            
+            df_home_away.rename(columns={'Away_Strength_Index':'Strength_Index_Away'}, inplace=True)
+            
+            df_home_away=df_home_away[['HomeTeam','AwayTeam','HTP','HTFormPts','Prob_H', 
+                           'B365H','B365D', 'B365A','ATP', 'ATFormPts', 'Delta_Prob_HD','Delta_Prob_HA', 
+                           'DiffFormPts','DiffPts','HM1', 'AM1','HM2','AM2','HM3','AM3', 'HM4','AM4','HM5', 'AM5',
+                           'Odds_HD_Diff', 'Odds_HA_Diff', 'Strength_Index_Away', 'Away_GD_Last5_Avg',
+                           'ATWinStreak5', 'ATGD', 'AHGD', 'B365D', 'Prob_D']]
+            
+            df_home_away = df_home_away.loc[:, ~df_home_away.columns.duplicated(keep='first')]
             
             
-            #DiffPts=HTP-ATP
-            #DiffFormPts=HTFormPts-ATFormPts
-            
-            #df_home=df.loc[df['HomeTeam']==home,cols_home].sort_values(by='Date', ascending=False).drop('Date', axis=1).head(1)
-            #df_away=df.loc[df['AwayTeam']==away,cols_away].sort_values(by='Date', ascending=False).drop('Date', axis=1).head(1)
-            #df_home=df_home.reset_index()
-            #df_away=df_away.reset_index()
-            
-            df_home_away,df_home_away, df_home, df_away=df_data(df, home, away)
             perf_home=df_home['HM1']+df_home['HM2']+df_home['HM3']+df_home['HM4']+df_home['HM5']
             perf_away=df_away['AM1']+df_away['AM2']+df_away['AM3']+df_away['AM4']+df_away['AM5']
-            
-            df_home_away=df_home_away[['HomeTeam','AwayTeam','HTP', 'ATP', 'HTGD', 'ATGD', 'HHGD', 'AHGD', 'DiffPts', 'DiffFormPts','HM1','HM2','HM3','HM4','HM5',
-                                       'AM1','AM2','AM3','AM4', 'AM5']]
             
             df_home_away=standardize_user_input(df_home_away, ds_scale)
             
@@ -431,7 +571,8 @@ def prediction():
                 'proba_2':str(round(y_proba[0][2]*100,0))+'%'
             })
             all_results.append(result)
-
+            # Log l'entrée + les prédictions
+            log_prediction(all_results)
         return jsonify({'Resultats': all_results})
 
     except Exception as e:
